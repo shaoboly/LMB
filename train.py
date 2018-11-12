@@ -200,7 +200,7 @@ def main(_):
     elif FLAGS.mode == 'test':
         test(FLAGS)
     else:
-        raise ValueError("The 'mode' flag must be one of train/eval/decode")
+        raise ValueError("The 'mode' flag must be one of train/dev/test")
 
 
 if __name__ == '__main__':
