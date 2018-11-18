@@ -34,17 +34,58 @@ class MnliProcessor(DataProcessor):
                     InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
 
+class QIMatch(DataProcessor):
+    """Processor for the CoLA data set (GLUE version)."""
+
+    def get_train_examples(self, data_dir,fname=None):
+        """See base class."""
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "train.txt.match")), "train")
+
+    def get_dev_examples(self, data_dir,fname=None):
+        """See base class."""
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "test.txt.match")), "dev")
+
+    def get_test_examples(self, data_dir,fname=None):
+        """See base class."""
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "test.txt.match")), "test")
+
+    def get_labels(self):
+        """See base class."""
+        return ["0","1"]
+
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            guid = "%s-%s" % (set_type, i)
+            text_a = tokenization.convert_to_unicode(line[1])
+            text_b = tokenization.convert_to_unicode(line[2])
+            label = tokenization.convert_to_unicode(line[3])
+            examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+        return examples
+
 
 class MrpcProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
     def get_train_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "train")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
 
     def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "dev")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
 
@@ -72,16 +113,25 @@ class QICProcessorMovie(DataProcessor):
 
     def get_train_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "train")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.txt.format")), "train")
 
     def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "dev")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "dev.txt.format")), "dev")
 
     def get_test_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "test")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "test.txt.format")), "test")
 
@@ -107,18 +157,27 @@ class QICProcessorMovie(DataProcessor):
 class QICProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "train")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.txt.format")), "train")
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "dev")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "dev.txt.format")), "dev")
 
-    def get_test_examples(self, data_dir):
+    def get_test_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "test")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "new-test.tsv.format")), "test")
 
@@ -149,12 +208,12 @@ class QICProcessor(DataProcessor):
 class ColaProcessor(DataProcessor):
     """Processor for the CoLA data set (GLUE version)."""
 
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir,fname=None):
         """See base class."""
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")

@@ -23,19 +23,25 @@ class InputFeatures(object):
         self.fd["input_ids"] = self.input_ids
         self.fd["input_mask"] = self.input_mask
         self.fd["segment_ids"] = self.segment_ids
-        self.fd["label_ids"] = self.tags
+        self.fd["tag_ids"] = self.tags
         self.fd["first_token_positions"] = self.first_token_positions
 
 class TaggingProcessor(object):
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir, fname=None):
+        if fname!=None:
+            return self._create_examples(os.path.join(data_dir, "open.train"), "train")
         return self._create_examples(os.path.join(data_dir, "open.train"), "train")
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir, fname=None):
         """Gets a collection of `InputExample`s for the dev set."""
+        if fname!=None:
+            return self._create_examples(os.path.join(data_dir, "open.train"), "dev")
         return self._create_examples(os.path.join(data_dir, "open.dev"), "train")
 
-    def get_test_examples(self, data_dir):
+    def get_test_examples(self, data_dir, fname=None):
         """Gets a collection of `InputExample`s for the test set."""
+        if fname!=None:
+            return self._create_examples(os.path.join(data_dir, "open.train"), "test")
         return self._create_examples(os.path.join(data_dir, "open.test"), "train")
 
     def get_labels(self):

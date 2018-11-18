@@ -4,14 +4,16 @@ import optimization
 import logging
 import os
 
-class TaggingModel(object):
-    def __init__(self,bert_config, batcher, hps):
+class TaggingMultitaskModel(object):
+    def __init__(self,bert_config,tagging_batcher,classify_batcher, hps):
         self.hps = hps
         self.bert_config = bert_config
         self.is_training = (self.hps.mode=="train")
-        self.batcher = batcher
 
-        self.num_train_steps = int(batcher.samples_number / hps.train_batch_size * hps.num_train_epochs)
+        self.tagging_batcher = tagging_batcher
+        self.classify_batcher = classify_batcher
+
+        self.num_train_steps = int(tagging_batcher.samples_number / hps.train_batch_size * hps.num_train_epochs)
         self.num_warmup_steps = int(self.num_train_steps * hps.warmup_proportion)
 
     def build_graph(self):
@@ -22,6 +24,9 @@ class TaggingModel(object):
         logging.debug("Graph id: {}{}".format(id(self.graph), self.graph))
         with self.graph.as_default():
             self._build_tagging_model()
+
+            with tf.variable_scope('subtask'):
+                self._build_classify_loss()
             self.train_op=None
             if self.is_training:
                 self.train_op = optimization.create_optimizer(
@@ -39,22 +44,26 @@ class TaggingModel(object):
         input_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='input_ids')
         input_mask = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='input_mask')
         segment_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='segment_ids')
-        label_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='tag_ids')
+
+        tag_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='tag_ids')
+
+        label_ids = tf.placeholder(tf.int32, [hps.train_batch_size], name='label_ids')
+
         tag_position = tf.placeholder(tf.float32, [hps.train_batch_size, hps.max_seq_length], name='tag_position')
 
-        '''self.learning_rate = tf.Variable(float(self.hps.learning_rate), trainable=False, dtype=tf.float32)
-        self.learning_rate_decay_op = self.learning_rate.assign(
-            self.learning_rate * self.hps.learning_rate_decay_factor)'''
-        return input_ids,input_mask,segment_ids,label_ids,tag_position
+        task_mask = tf.placeholder(tf.float32, [hps.train_batch_size], name='task_mask')
+
+        self.input_ids, self.input_mask, self.segment_ids, self.tag_ids, self.label_ids, self.tag_position, self.task_mask = \
+            input_ids,input_mask,segment_ids,tag_ids,label_ids,tag_position, task_mask
+
+        return input_ids,input_mask,segment_ids,tag_ids,label_ids,tag_position, task_mask
 
 
     def _build_tagging_model(self):
         is_training = self.is_training
-        num_labels = self.batcher.label_num
+        num_labels = self.tagging_batcher.label_num
 
-        input_ids, input_mask, segment_ids, label_ids, tag_position = self._add_placeholders()
-        self.input_ids, self.input_mask, self.segment_ids, self.label_ids,self.tag_position = \
-            input_ids, input_mask, segment_ids, label_ids,tag_position
+        input_ids, input_mask, segment_ids, tag_ids, label_ids, tag_position, task_mask = self._add_placeholders()
 
         """Creates a classification model."""
         model = modeling.BertModel(
@@ -64,6 +73,7 @@ class TaggingModel(object):
             input_mask=input_mask,
             token_type_ids=segment_ids,
             use_one_hot_embeddings=self.hps.use_tpu)#use_one_hot_embeddings=Flags.tpu ?
+        self.bert_encoder = model
 
         last_layer = model.get_sequence_output()
 
@@ -92,7 +102,7 @@ class TaggingModel(object):
             log_probs = tf.reshape(log_probs, [-1, seq_len, num_labels])
 
 
-            one_hot_tags = tf.one_hot(label_ids, depth=num_labels, dtype=tf.float32)
+            one_hot_tags = tf.one_hot(tag_ids, depth=num_labels, dtype=tf.float32)
 
             per_seq_per_token_confidence = tf.reduce_sum(one_hot_tags * log_probs, axis=-1)
 
@@ -100,13 +110,46 @@ class TaggingModel(object):
                 per_seq_per_token_confidence * tag_position, axis=-1)
 
             average_loss_per_seq = - per_seq_per_first_position_confidence_sum / tf.reduce_sum(tag_position,axis=-1)
-            loss = tf.reduce_mean(average_loss_per_seq)
-            # loss = tf.Print(loss, [loss])
+            loss = tf.reduce_mean(average_loss_per_seq*self.task_mask)
+            #loss = tf.Print(loss, [loss])
 
-        self.loss, self.per_example_loss, self.logits \
-            = loss, average_loss_per_seq, logits
-        self.predictions = tf.reshape(tf.argmax(logits, axis=-1, output_type=tf.int32),shape=[-1,seq_len])
+        self.tagging_loss,self.tagging_logits = loss, logits
+        self.tagging_predictions = tf.reshape(tf.argmax(logits, axis=-1, output_type=tf.int32),shape=[-1,seq_len])
 
+    def _build_classify_loss(self):
+        is_training = self.is_training
+        num_labels = self.classify_batcher.label_num
+        label_ids = self.label_ids
+
+        model = self.bert_encoder
+        output_layer = model.get_pooled_output()
+
+        hidden_size = output_layer.shape[-1].value
+        output_weights = tf.get_variable(
+            "output_weights", [num_labels, hidden_size],
+            initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+        output_bias = tf.get_variable(
+            "output_bias", [num_labels], initializer=tf.zeros_initializer())
+
+        with tf.variable_scope("loss"):
+            if is_training:
+                # I.e., 0.1 dropout
+                output_layer = tf.nn.dropout(output_layer, keep_prob=0.9)
+
+            logits = tf.matmul(output_layer, output_weights, transpose_b=True)
+            logits = tf.nn.bias_add(logits, output_bias)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
+
+            one_hot_labels = tf.one_hot(label_ids, depth=num_labels, dtype=tf.float32)
+
+            per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+            loss = tf.reduce_sum(per_example_loss*(1-self.task_mask))
+
+        self.classify_loss,self.classify_logits = loss,logits
+        self.classify_predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
+
+        self.loss = self.classify_loss+self.tagging_loss
 
     def _load_init_bert_parameter(self):
         init_checkpoint = self.hps.init_checkpoint
@@ -133,18 +176,28 @@ class TaggingModel(object):
         self.tensor_list = {"input_ids": self.input_ids,
                             "input_mask": self.input_mask,
                             "segment_ids": self.segment_ids,
-                            "tag_ids": self.label_ids,
-                            "train_opt": self.train_op,
+                            "label_ids": self.label_ids,
+                            "tag_ids": self.tag_ids,
                             "first_token_positions":self.tag_position,
+
+                            "train_opt": self.train_op,
+
+                            "tagging_loss":self.tagging_loss,
+                            "tagging_logits":self.tagging_logits,
+                            "tagging_predictions": self.tagging_predictions,
+
+                            "classify_loss": self.classify_loss,
+                            "classify_logits": self.classify_logits,
+                            "classify_predictions": self.classify_predictions,
+
+                            "task_mask": self.task_mask,
+
                             "loss":self.loss,
-                            "per_example_loss":self.per_example_loss,
-                            "logits":self.logits,
-                            "predictions":self.predictions,
                             "last_layer":self.last_layer,
                             }
-        self.input_keys = ["input_ids","input_mask","segment_ids","tag_ids","first_token_positions"]
-        self.output_keys_train = ["loss","per_example_loss","train_opt"]
-        self.output_keys_dev = ["loss", "logits","predictions"]
+        self.input_keys = ["input_ids","input_mask","segment_ids","label_ids","first_token_positions","tag_ids","task_mask"]
+        self.output_keys_train = ["loss","train_opt","tagging_loss","classify_loss"]
+        self.output_keys_dev = ["loss","tagging_predictions"]
 
 
     def _make_feed_dict(self,batch):

@@ -14,7 +14,7 @@ import numpy as np
 #os.environ["CUDA_VISIBLE_DEVICES"]=""
 
 def create_train_eval_model(FLAGS):
-    Classify_model = model_pools["tagging_model"]
+    Classify_model = model_pools["tagging_classify_model"]
 
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
     if FLAGS.max_seq_length > bert_config.max_position_embeddings:
@@ -26,24 +26,65 @@ def create_train_eval_model(FLAGS):
     tf.gfile.MakeDirs(FLAGS.output_dir)
 
     # load custom processer from task name
-    task_name = FLAGS.task_name.lower()
-    if task_name not in processors:
-        raise ValueError("Task not found: %s" % (task_name))
+    task_name1 = "ner"
+    task_name2 = "qicm"
 
+    FLAGS_tagging = FLAGS._asdict()
+    FLAGS_tagging["train_batch_size"] = int(FLAGS_tagging["train_batch_size"]/2)
+    FLAGS_tagging = config.generate_nametuple(FLAGS_tagging)
 
-    processor = processors[task_name]()
-    train_batcher = Batcher(processor, FLAGS)
+    FLAGS_classify = FLAGS._asdict()
+    FLAGS_classify["train_batch_size"] = int(FLAGS_classify["train_batch_size"]/2)
+    #pad to equal
+    FLAGS_classify["train_batch_size"]+= FLAGS.train_batch_size - FLAGS_tagging.train_batch_size - FLAGS_classify["train_batch_size"]
+
+    FLAGS_classify["train_file"] = FLAGS_classify["train_file_multi"]
+    FLAGS_classify["dev_file"] = FLAGS_classify["dev_file_multi"]
+    FLAGS_classify["test_file"] = FLAGS_classify["test_file_multi"]
+    FLAGS_classify = config.generate_nametuple(FLAGS_classify)
+
+    processor_tagging = processors[task_name1]()
+    processor_classify = processors[task_name2]()
+
+    tagging_batcher = Batcher(processor_tagging, FLAGS_tagging)
+    classify_batcher = Batcher(processor_classify, FLAGS_classify)
+
     # create trainning model
-    Bert_model = Classify_model(bert_config, train_batcher, FLAGS)
+    Bert_model = Classify_model(bert_config, tagging_batcher,classify_batcher, FLAGS)
     Bert_model.build_graph()
     Bert_model.create_or_load_recent_model()
+
+
+
+
+
+    FLAGS_tagging = FLAGS._asdict()
+    FLAGS_tagging["train_batch_size"] = int(FLAGS_tagging["train_batch_size"] / 2)
+    FLAGS_tagging["mode"] = "dev"
+    FLAGS_tagging = config.generate_nametuple(FLAGS_tagging)
+
+    FLAGS_classify = FLAGS._asdict()
+    FLAGS_classify["train_batch_size"] = int(FLAGS_classify["train_batch_size"] / 2)
+    FLAGS_classify["mode"] = "dev"
+
+    FLAGS_classify["train_file"] = FLAGS_classify["train_file_multi"]
+    FLAGS_classify["dev_file"] = FLAGS_classify["dev_file_multi"]
+    FLAGS_classify["test_file"] = FLAGS_classify["test_file_multi"]
+    FLAGS_classify = config.generate_nametuple(FLAGS_classify)
 
 
     FLAGS_eval = FLAGS._asdict()
     FLAGS_eval["mode"] = "dev"
     FLAGS_eval = config.generate_nametuple(FLAGS_eval)
-    validate_batcher =Batcher(processor, FLAGS_eval)
-    validate_model = Classify_model(bert_config, validate_batcher, FLAGS_eval)
+
+
+    processor_tagging = processors[task_name1]()
+    processor_classify = processors[task_name2]()
+
+    tagging_batcher = Batcher(processor_tagging, FLAGS_tagging)
+    classify_batcher = Batcher(processor_classify, FLAGS_classify)
+
+    validate_model = Classify_model(bert_config, tagging_batcher,classify_batcher, FLAGS_eval)
     validate_model.build_graph()
     validate_model.create_or_load_recent_model()
 
@@ -58,25 +99,31 @@ def train_with_eval(FLAGS):
     checkpoint_basename = os.path.join(FLAGS.output_dir, "Bert-Classify")
     logging.info(checkpoint_basename)
     Bert_model.save_model(checkpoint_basename)
-    Best_acc = eval_acc(FLAGS,validate_model,Bert_model)
+    #Best_acc = eval_acc(FLAGS,validate_model,Bert_model)
+    Best_acc=0
     bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
 
     start_step = Bert_model.load_specific_variable(Bert_model.global_step)
     for step in range(start_step,Bert_model.num_train_steps):
-        batch =Bert_model.batcher.next_batch()
-        if batch==None:
+        tagging_batch = Bert_model.tagging_batcher.next_batch()
+        classify_batch =Bert_model.classify_batcher.next_batch()
+
+        if tagging_batch==None or classify_batch==None:
             bestDevModel, Best_acc, acc = greedy_model_save(bestDevModel, checkpoint_basename, Best_acc, Bert_model,
                                                             validate_model, FLAGS)
-            logging.info("Finish epoch: {}".format(Bert_model.batcher.c_epoch))
+            logging.info("Finish epoch: {}".format(Bert_model.tagging_batcher.c_epoch))
             logging.info("ACC {} Best_ACC: {}\n\n".format(acc, Best_acc))
-            if Bert_model.batcher.c_epoch>=FLAGS.num_train_epochs:
+            if Bert_model.tagging_batcher.c_epoch>=FLAGS.num_train_epochs:
                 break
             continue
 
+
+        batch = Bert_model.classify_batcher.merge_multi_task(tagging_batch,classify_batch)
         results = Bert_model.run_train_step(batch)
 
         if step%100==0:
             logging.info("step {} loss: {}\n".format(step,results["loss"]))
+            logging.info("tagging {} classify: {}\n".format(results["tagging_loss"], results["classify_loss"]))
 
         if step%FLAGS.save_checkpoints_steps==0 and step!=0:
             bestDevModel, Best_acc, acc = greedy_model_save(bestDevModel, checkpoint_basename, Best_acc, Bert_model, validate_model, FLAGS)
@@ -86,41 +133,49 @@ def train_with_eval(FLAGS):
     Bert_model.save_model(bestDevModel, False)
 
 def greedy_model_save(bestDevModel,checkpoint_basename,Best_acc,Bert_model,validate_model,FLAGS):
-    Bert_model.save_model(checkpoint_basename,False)
-    acc = eval_acc(FLAGS, validate_model, Bert_model)
+    Bert_model.save_model(checkpoint_basename,True)
+    bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
+    '''acc = eval_acc(FLAGS, validate_model, Bert_model)
     if acc >= Best_acc:
         Bert_model.save_model(checkpoint_basename, True)
         bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
         Best_acc = acc
-        logging.info("save new model")
+        logging.info("save new model")'''
 
-    return bestDevModel,Best_acc,acc
+    return bestDevModel,Best_acc,0
 
 def eval_acc(FLAGS,dev_model,train_model):
     dev_model.graph.as_default()
     dev_model.create_or_load_recent_model()
     dev_loss = 0
-    valid_batcher = dev_model.batcher
 
     loss_all = []
     first_tokens_mask = []
     predictions = []
     labels = []
+    task_mask = []
     while True:
-        batch =dev_model.batcher.next_batch()
-        if batch==None:
+        tagging_batch = dev_model.tagging_batcher.next_batch()
+        classify_batch = dev_model.classify_batcher.next_batch()
+
+        batch = dev_model.classify_batcher.merge_multi_task(tagging_batch,classify_batch)
+        if tagging_batch==None:
             break
+        if batch==None:
+            continue
         results = dev_model.run_dev_step(batch)
         loss_all.append(results["loss"])
 
         if batch["real_length"]<FLAGS.train_batch_size:
-            results["predictions"] = list(results["predictions"])[:batch["real_length"]]
+            break
+            results["tagging_predictions"] = list(results["tagging_predictions"])[:batch["real_length"]]
             batch["tag_ids"] = batch["tag_ids"][:batch["real_length"]]
             batch['first_token_positions'] = batch['first_token_positions'][:batch["real_length"]]
-        predictions+=list(results["predictions"])
+        predictions+=list(results["tagging_predictions"])
         labels+=batch["tag_ids"]
         first_tokens_mask+=batch['first_token_positions']
-        #print(batch["tag_ids"],results["predictions"])
+        task_mask +=batch["task_mask"]
+        #print(batch["tag_ids"],results["tagging_predictions"])
 
     loss = np.average(loss_all)
     total = len(predictions)
@@ -179,13 +234,13 @@ def test(FLAGS):
         loss_all.append(results["loss"])
 
         if batch["real_length"] < FLAGS.train_batch_size:
-            results["predictions"] = list(results["predictions"])[:batch["real_length"]]
-            batch["tag_ids"] = batch["tag_ids"][:batch["real_length"]]
+            results["tagging_predictions"] = list(results["tagging_predictions"])[:batch["real_length"]]
+            batch["label_ids"] = batch["label_ids"][:batch["real_length"]]
             batch['first_token_positions'] = batch['first_token_positions'][:batch["real_length"]]
-        predictions += list(results["predictions"])
-        labels += batch["tag_ids"]
+        predictions += list(results["tagging_predictions"])
+        labels += batch["label_ids"]
         first_tokens_mask += batch['first_token_positions']
-        # print(batch["tag_ids"],results["predictions"])
+        # print(batch["label_ids"],results["tagging_predictions"])
 
     loss = np.average(loss_all)
     total = len(predictions)

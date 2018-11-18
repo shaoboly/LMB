@@ -14,7 +14,7 @@ import numpy as np
 #os.environ["CUDA_VISIBLE_DEVICES"]=""
 
 def create_train_eval_model(FLAGS):
-    Classify_model = model_pools["classify_model"]
+    Classify_model = model_pools[FLAGS.model_name]
 
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
     if FLAGS.max_seq_length > bert_config.max_position_embeddings:
@@ -138,7 +138,7 @@ def eval(FLAGS):
 
 def test(FLAGS):
     bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
-    Classify_model = model_pools["classify_model"]
+    Classify_model = model_pools[FLAGS.model_name]
     processor = processors[FLAGS.task_name.lower()]()
 
     validate_batcher = Batcher(processor, FLAGS)

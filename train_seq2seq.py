@@ -115,12 +115,12 @@ def eval_acc(FLAGS,dev_model,train_model):
 
         if batch["real_length"]<FLAGS.train_batch_size:
             results["predictions"] = list(results["predictions"])[:batch["real_length"]]
-            batch["tag_ids"] = batch["tag_ids"][:batch["real_length"]]
+            batch["label_ids"] = batch["label_ids"][:batch["real_length"]]
             batch['first_token_positions'] = batch['first_token_positions'][:batch["real_length"]]
         predictions+=list(results["predictions"])
-        labels+=batch["tag_ids"]
+        labels+=batch["label_ids"]
         first_tokens_mask+=batch['first_token_positions']
-        #print(batch["tag_ids"],results["predictions"])
+        #print(batch["label_ids"],results["predictions"])
 
     loss = np.average(loss_all)
     total = len(predictions)
@@ -180,12 +180,12 @@ def test(FLAGS):
 
         if batch["real_length"] < FLAGS.train_batch_size:
             results["predictions"] = list(results["predictions"])[:batch["real_length"]]
-            batch["tag_ids"] = batch["tag_ids"][:batch["real_length"]]
+            batch["label_ids"] = batch["label_ids"][:batch["real_length"]]
             batch['first_token_positions'] = batch['first_token_positions'][:batch["real_length"]]
         predictions += list(results["predictions"])
-        labels += batch["tag_ids"]
+        labels += batch["label_ids"]
         first_tokens_mask += batch['first_token_positions']
-        # print(batch["tag_ids"],results["predictions"])
+        # print(batch["label_ids"],results["predictions"])
 
     loss = np.average(loss_all)
     total = len(predictions)

@@ -26,12 +26,12 @@ class Batcher(object):
         config = self._config
 
         if mode=="train":
-            examples = processor.get_train_examples(config.data_dir)
+            examples = processor.get_train_examples(config.data_dir,config.train_file)
             random.shuffle(examples)
         elif mode=="dev":
-            examples = processor.get_dev_examples(config.data_dir)
+            examples = processor.get_dev_examples(config.data_dir,config.dev_file)
         elif mode=="test":
-            examples = processor.get_test_examples(config.data_dir)
+            examples = processor.get_test_examples(config.data_dir,config.test_file)
         else:
             raise ValueError("Only train dev test modes are supported: %s" % (mode))
 
@@ -69,24 +69,38 @@ class Batcher(object):
         for feature in self.feed_features[self.c_index:e_index]:
             for k in features_list:
                 batch[k].append(feature.fd[k])
-            '''
-            batch["input_ids"].append(feature.input_ids)
-            batch["input_mask"].append(feature.input_mask)
-            batch["segment_ids"].append(feature.segment_ids)
-            batch["label_ids"].append(feature.label_id)'''
 
         batch["real_length"] = len(batch["input_ids"])
         while len(batch["input_ids"])<self._config.train_batch_size:
             for k in features_list:
                 batch[k].append(batch[k][-1])
-            '''
-            batch["input_ids"].append(batch["input_ids"][-1])
-            batch["input_mask"].append(batch["input_mask"][-1])
-            batch["segment_ids"].append(batch["segment_ids"][-1])
-            batch["label_ids"].append(batch["label_ids"][-1])'''
+
+        batch["size"] = self._config.train_batch_size
 
         self.c_index=e_index
         return batch
+
+    def merge_multi_task(self,batch1,batch2):
+        if batch1==None or batch2==None:
+            return None
+
+        batch1_size = batch1["size"]
+        batch2_size = batch2["size"]
+
+        for k in batch2.keys():
+            if k in batch1:
+                batch1[k]+=batch2[k]
+            else:
+                batch1[k] = [batch2[k][0] for i in range(batch1_size)]+batch2[k]
+
+        for k in batch1.keys():
+            if k not in batch2:
+                batch1[k]+=[batch1[k][0] for i in range(batch2_size)]
+
+        batch1["task_mask"] = [1.0 for i in range(batch1_size)] + [0.0 for i in range(batch2_size)]
+        return batch1
+
+
 
 
 
@@ -94,53 +108,3 @@ class Batcher(object):
         pass
 
 
-def input_fn_builder(features, seq_length, is_training, drop_remainder):
-    """Creates an `input_fn` closure to be passed to TPUEstimator."""
-
-    all_input_ids = []
-    all_input_mask = []
-    all_segment_ids = []
-    all_label_ids = []
-
-    for feature in features:
-        all_input_ids.append(feature.input_ids)
-        all_input_mask.append(feature.input_mask)
-        all_segment_ids.append(feature.segment_ids)
-        all_label_ids.append(feature.label_id)
-
-    def input_fn(params):
-        """The actual input function."""
-        batch_size = params["batch_size"]
-
-        num_examples = len(features)
-
-        # This is for demo purposes and does NOT scale to large data sets. We do
-        # not use Dataset.from_generator() because that uses tf.py_func which is
-        # not TPU compatible. The right way to load data is with TFRecordReader.
-        d = tf.data.Dataset.from_tensor_slices({
-                "input_ids":
-                        tf.constant(
-                                all_input_ids, shape=[num_examples, seq_length],
-                                dtype=tf.int32),
-                "input_mask":
-                        tf.constant(
-                                all_input_mask,
-                                shape=[num_examples, seq_length],
-                                dtype=tf.int32),
-                "segment_ids":
-                        tf.constant(
-                                all_segment_ids,
-                                shape=[num_examples, seq_length],
-                                dtype=tf.int32),
-                "label_ids":
-                        tf.constant(all_label_ids, shape=[num_examples], dtype=tf.int32),
-        })
-
-        if is_training:
-            d = d.repeat()
-            d = d.shuffle(buffer_size=100)
-
-        d = d.batch(batch_size=batch_size, drop_remainder=drop_remainder)
-        return d
-
-    return input_fn

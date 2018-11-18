@@ -39,22 +39,22 @@ class TaggingModel(object):
         input_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='input_ids')
         input_mask = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='input_mask')
         segment_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='segment_ids')
-        label_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='tag_ids')
-        tag_position = tf.placeholder(tf.float32, [hps.train_batch_size, hps.max_seq_length], name='tag_position')
 
-        '''self.learning_rate = tf.Variable(float(self.hps.learning_rate), trainable=False, dtype=tf.float32)
-        self.learning_rate_decay_op = self.learning_rate.assign(
-            self.learning_rate * self.hps.learning_rate_decay_factor)'''
-        return input_ids,input_mask,segment_ids,label_ids,tag_position
+        decode_input = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='decode_input')
+        tgt_ids = tf.placeholder(tf.int32, [hps.train_batch_size, hps.max_seq_length], name='tgt_ids')
+        decode_mask = tf.placeholder(tf.float32, [hps.train_batch_size, hps.max_seq_length], name='decode_mask')
+
+        self.input_ids, self.input_mask, self.segment_ids, self.tgt_ids, self.decode_input, self.decode_mask \
+            =input_ids, input_mask, segment_ids, tgt_ids, decode_input, decode_mask
+
+        return input_ids,input_mask,segment_ids,tgt_ids,decode_input,decode_mask
 
 
-    def _build_tagging_model(self):
+    def _build_seq2seq_model(self):
         is_training = self.is_training
         num_labels = self.batcher.label_num
 
-        input_ids, input_mask, segment_ids, label_ids, tag_position = self._add_placeholders()
-        self.input_ids, self.input_mask, self.segment_ids, self.label_ids,self.tag_position = \
-            input_ids, input_mask, segment_ids, label_ids,tag_position
+        input_ids, input_mask, segment_ids, tgt_ids, decode_input, decode_mask = self._add_placeholders()
 
         """Creates a classification model."""
         model = modeling.BertModel(
@@ -133,7 +133,7 @@ class TaggingModel(object):
         self.tensor_list = {"input_ids": self.input_ids,
                             "input_mask": self.input_mask,
                             "segment_ids": self.segment_ids,
-                            "tag_ids": self.label_ids,
+                            "label_ids": self.label_ids,
                             "train_opt": self.train_op,
                             "first_token_positions":self.tag_position,
                             "loss":self.loss,
@@ -142,7 +142,7 @@ class TaggingModel(object):
                             "predictions":self.predictions,
                             "last_layer":self.last_layer,
                             }
-        self.input_keys = ["input_ids","input_mask","segment_ids","tag_ids","first_token_positions"]
+        self.input_keys = ["input_ids","input_mask","segment_ids","label_ids","first_token_positions"]
         self.output_keys_train = ["loss","per_example_loss","train_opt"]
         self.output_keys_dev = ["loss", "logits","predictions"]
 

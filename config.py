@@ -17,11 +17,25 @@ flags.DEFINE_string(
     "for the task.")
 
 flags.DEFINE_string(
+    "train_file", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
+
+flags.DEFINE_string(
+    "dev_file", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
+
+flags.DEFINE_string(
+    "test_file", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
+
+flags.DEFINE_string(
     "bert_config_file", None,
     "The config json file corresponding to the pre-trained BERT model. "
     "This specifies the model architecture.")
 
 flags.DEFINE_string("task_name", None, "The name of the task to train.")
+
+flags.DEFINE_string("model_name", "classify_model", "The name of the model to train.")
 
 flags.DEFINE_string("vocab_file", None,
                     "The vocabulary file that the BERT model was trained on.")
@@ -46,6 +60,7 @@ flags.DEFINE_integer(
     "The maximum total input sequence length after WordPiece tokenization. "
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
+
 
 flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
@@ -101,6 +116,19 @@ tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
 flags.DEFINE_integer(
     "num_tpu_cores", 8,
     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
+
+
+flags.DEFINE_string(
+    "train_file_multi", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
+
+flags.DEFINE_string(
+    "dev_file_multi", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
+
+flags.DEFINE_string(
+    "test_file_multi", None,
+    "The input data dir. Should contain the .tsv files (or other data files) ")
 
 
 def retype_FLAGS():
