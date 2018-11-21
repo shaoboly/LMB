@@ -13,6 +13,7 @@ processors = {
       "qic":QICProcessor,
       "qicm":QICProcessorMovie,
       "qimatch":QIMatch,
+      "simpleqmatch":SimpleQMatch,
       "ner":TaggingProcessor,
       "matchcombine":RnnMatchCombine
   }

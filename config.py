@@ -10,6 +10,7 @@ tf.set_random_seed(111)  # a seed value for randomness
 flags = tf.flags
 FLAGS = flags.FLAGS
 
+flags.DEFINE_bool("debug", False, "Debug Mode")
 ## Required parameters
 flags.DEFINE_string(
     "data_dir", None,
@@ -32,6 +33,10 @@ flags.DEFINE_string(
     "bert_config_file", None,
     "The config json file corresponding to the pre-trained BERT model. "
     "This specifies the model architecture.")
+
+flags.DEFINE_string("gpus", "1,2", "The gpus use for train and test.")
+
+flags.DEFINE_integer("candidate_num",9,"candidate number for match eval")
 
 flags.DEFINE_string("task_name", None, "The name of the task to train.")
 
@@ -118,6 +123,7 @@ flags.DEFINE_integer(
     "Only used if `use_tpu` is True. Total number of TPU cores to use.")
 
 
+#for multi_task not use
 flags.DEFINE_string(
     "train_file_multi", None,
     "The input data dir. Should contain the .tsv files (or other data files) ")

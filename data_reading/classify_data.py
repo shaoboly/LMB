@@ -39,16 +39,25 @@ class QIMatch(DataProcessor):
 
     def get_train_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "train")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.txt.match")), "train")
 
     def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "dev")
         return self._create_examples(
-                self._read_tsv(os.path.join(data_dir, "test.txt.match")), "dev")
+                self._read_tsv(os.path.join(data_dir, "dev.txt.match")), "dev")
 
     def get_test_examples(self, data_dir,fname=None):
         """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "test")
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "test.txt.match")), "test")
 
@@ -65,6 +74,51 @@ class QIMatch(DataProcessor):
             text_a = tokenization.convert_to_unicode(line[1])
             text_b = tokenization.convert_to_unicode(line[2])
             label = tokenization.convert_to_unicode(line[3])
+            examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+        return examples
+
+
+class SimpleQMatch(DataProcessor):
+    """Processor for the CoLA data set (GLUE version)."""
+
+    def get_train_examples(self, data_dir,fname=None):
+        """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "train")
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "train.txt.match")), "train")
+
+    def get_dev_examples(self, data_dir,fname=None):
+        """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "dev")
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "dev.txt.match")), "dev")
+
+    def get_test_examples(self, data_dir,fname=None):
+        """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "test")
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "test.txt.match")), "test")
+
+    def get_labels(self):
+        """See base class."""
+        return ["0","1"]
+
+
+    def _create_examples(self, lines, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for (i, line) in enumerate(lines):
+            guid = "%s-%s" % (set_type, i)
+            text_a = tokenization.convert_to_unicode(line[0])
+            text_b = tokenization.convert_to_unicode(line[1])
+            label = tokenization.convert_to_unicode(line[2])
             examples.append(
                     InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples

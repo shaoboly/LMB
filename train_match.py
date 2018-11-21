@@ -115,22 +115,34 @@ def eval_acc(FLAGS,dev_model,train_model):
 
         if batch["real_length"]<FLAGS.train_batch_size:
             results["predictions"] = list(results["predictions"])[:batch["real_length"]]
-            results["label_ids"] = list(batch["label_ids"])[:batch["real_length"]]
-        predictions+=list(results["predictions"])
+            batch["label_ids"] = batch["label_ids"][:batch["real_length"]]
+            results["logits"] = list(results["logits"])[:batch["real_length"]]
+        predictions += list(results["predictions"])
+        logits_all += list(results["logits"])
         labels+=batch["label_ids"]
 
         #print(batch["label_ids"],results["predictions"])
 
     loss = np.average(loss_all)
-    total = len(predictions)
+    total = 0
     acc = 0
-    for pred,label in zip(predictions,labels):
-        if pred==label:
-            acc+=1
-    acc = acc / total
-    logging.info("dev accuracy: {} dev loss:{}".format(np.round(acc*100,4),loss))
+    i = 0
 
-    train_model.graph.as_default()
+    candidate_number = FLAGS.candidate_num
+    while i < len(labels):
+        total += 1
+        tmp_label = []
+        tmp_logits = []
+        for k in range(candidate_number):
+            tmp_label.append(labels[i+k])
+            tmp_logits.append(logits_all[i+k][1])
+        max_index = int(np.argmax(tmp_logits))
+        if tmp_label[max_index] == 1:
+            acc += 1
+        i+=candidate_number
+
+    acc = acc / total
+    logging.info("test accuracy: {} test loss:{}".format(acc, loss))
     return acc
 
 def eval(FLAGS):
@@ -177,15 +189,24 @@ def test(FLAGS):
         # print(batch["label_ids"],results["predictions"])
 
     loss = np.average(loss_all)
-    total = len(predictions)
+    total = 0
     acc = 0
 
-
-    for i,(pred, label) in enumerate(zip(predictions, labels)):
-        if pred == label:
+    i=0
+    candidate_number = FLAGS.candidate_num
+    while i < len(labels):
+        total += 1
+        tmp_label = []
+        tmp_logits = []
+        for k in range(candidate_number):
+            tmp_label.append(labels[i + k])
+            tmp_logits.append(logits_all[i + k][1])
+        max_index = int(np.argmax(tmp_logits))
+        if tmp_label[max_index] == 1:
             acc += 1
+        i += candidate_number
 
-    acc = acc / total
+    acc = acc/total
     logging.info("test accuracy: {} test loss:{}".format(acc, loss))
 
 

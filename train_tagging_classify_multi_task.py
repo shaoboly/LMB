@@ -99,8 +99,8 @@ def train_with_eval(FLAGS):
     checkpoint_basename = os.path.join(FLAGS.output_dir, "Bert-Classify")
     logging.info(checkpoint_basename)
     Bert_model.save_model(checkpoint_basename)
-    #Best_acc = eval_acc(FLAGS,validate_model,Bert_model)
-    Best_acc=0
+    Best_acc = eval_acc(FLAGS,validate_model,Bert_model)
+    #Best_acc=0
     bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
 
     start_step = Bert_model.load_specific_variable(Bert_model.global_step)
@@ -135,14 +135,14 @@ def train_with_eval(FLAGS):
 def greedy_model_save(bestDevModel,checkpoint_basename,Best_acc,Bert_model,validate_model,FLAGS):
     Bert_model.save_model(checkpoint_basename,True)
     bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
-    '''acc = eval_acc(FLAGS, validate_model, Bert_model)
+    acc = eval_acc(FLAGS, validate_model, Bert_model)
     if acc >= Best_acc:
         Bert_model.save_model(checkpoint_basename, True)
         bestDevModel = tf.train.get_checkpoint_state(FLAGS.output_dir).model_checkpoint_path
         Best_acc = acc
-        logging.info("save new model")'''
+        logging.info("save new model")
 
-    return bestDevModel,Best_acc,0
+    return bestDevModel,Best_acc,acc
 
 def eval_acc(FLAGS,dev_model,train_model):
     dev_model.graph.as_default()
@@ -178,13 +178,16 @@ def eval_acc(FLAGS,dev_model,train_model):
         #print(batch["tag_ids"],results["tagging_predictions"])
 
     loss = np.average(loss_all)
-    total = len(predictions)
+    total = 0
 
     word_cnt = 0
     word_cnt_acc = 0
     sentence_acc = 0
-    for preds,labels,first_masks in zip(predictions,labels,first_tokens_mask):
+    for preds,labels,first_masks,tagging_mask in zip(predictions,labels,first_tokens_mask,task_mask):
         diff = True
+        if int(tagging_mask)==0:
+            continue
+        total+=1
         for p,r,m in zip(preds,labels,first_masks):
             if m==0:
                 continue

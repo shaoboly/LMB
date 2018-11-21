@@ -35,6 +35,10 @@ class Batcher(object):
         else:
             raise ValueError("Only train dev test modes are supported: %s" % (mode))
 
+
+        if self._config.debug:
+            examples = examples[:100]
+
         self.label_num = len(self.processor.get_labels())
         self.samples_number = len(examples)
         self.examples = examples
@@ -97,7 +101,7 @@ class Batcher(object):
             if k not in batch2:
                 batch1[k]+=[batch1[k][0] for i in range(batch2_size)]
 
-        batch1["task_mask"] = [1.0 for i in range(batch1_size)] + [0.0 for i in range(batch2_size)]
+        batch1["task_mask"] = [1 for i in range(batch1_size)] + [0 for i in range(batch2_size)]
         return batch1
 
 
