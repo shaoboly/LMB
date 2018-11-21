@@ -135,6 +135,14 @@ class MrpcProcessor(DataProcessor):
         return self._create_examples(
                 self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
 
+    def get_test_examples(self, data_dir,fname=None):
+        """See base class."""
+        if fname!=None:
+            return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, fname)), "test")
+        return self._create_examples(
+                self._read_tsv(os.path.join(data_dir, "test.tsv")), "test")
+
     def get_dev_examples(self, data_dir,fname=None):
         """See base class."""
         if fname!=None:
